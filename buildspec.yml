@@ -1,0 +1,53 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    GH_PERSONAL_ACCESS_TOKEN: arn:aws:secretsmanager:ap-south-1:957877698746:secret:codebuild/gh_token-NGSjPm  # <- replace {xxxx} part with arn of secret
+
+phases:
+  pre_build:
+    commands:
+      - echo "Retrieving personal access token from AWS Secrets Manager..."
+      - export PERSONAL_ACCESS_TOKEN=${GH_PERSONAL_ACCESS_TOKEN}
+      - echo "Personal access token retrieved successfully."
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+    # configure pip to authenticate using your GitHub personal access token
+    # - echo "${GH_PERSONAL_ACCESS_TOKEN}"
+      - echo "Setting up pip configuration..."
+      - echo "[distutils]" > ~/.pypirc
+      - echo "index-servers =" >> ~/.pypirc
+      - echo "    pypi" >> ~/.pypirc
+      - echo "[pypi]" >> ~/.pypirc
+      - echo "repository=https://pypi.org/simple" >> ~/.pypirc
+    # tells pip to use the provided token instead of a username
+      - echo "username=__token__" >> ~/.pypirc
+    # injects the GitHub personal access token stored in AWS Secrets Manager into the configuration
+      - echo "password=${GH_PERSONAL_ACCESS_TOKEN}" >> ~/.pypirc
+    # installing dependencies
+      - echo "Installing dependencies..."
+      - pip install --no-cache-dir -r pet_main/requirements.txt -t pet_main  # Install for the pet_main lambda
+     # - pip install --no-cache-dir -r second/requirements.txt -t second  # Install for the second lambda
+
+  build:
+    commands:
+      - echo "Zipping pet_main lambda deployment package..."
+      - cd pet_main && zip -r9 ../pet_main_deployment_package.zip . && cd ..
+     #- echo "Zipping second lambda deployment package..."
+     # - cd second && zip -r9 ../second_deployment_package.zip . && cd ..
+
+  post_build:
+    commands:
+      # - echo "Updating live Lambda function..."
+      # - aws lambda update-function-code --function-name pet-lamda-function --zip-file fileb://pet_main_deployment_package.zip
+      - echo "Updating dev Lambda function..."
+      - aws lambda update-function-code --function-name pet-lamda-function-dev --zip-file fileb://pet_main_deployment_package.zip
+
+      - echo "DONE!!"
+
+artifacts:
+  files:
+    - pet_main_deployment_package.zip
+  #  - second_deployment_package.zip
